@@ -1,0 +1,12 @@
+export const DEFAULT_BASE_URL = 'https://api.apifox.com/v1'
+export const DEFAULT_API_VERSION = '2024-03-28'
+export const DEFAULT_OAS_VERSION = '3.1'
+export const DEFAULT_EXPORT_FORMAT = 'JSON' as const
+export const DEFAULT_OUTPUT_DIRECTORY = 'docs/apifox'
+export const DEFAULT_OUTPUT_FILE = 'openapi.json'
+export const DEFAULT_OUTPUT_FILE_YAML = 'openapi.yaml'
+export const DEFAULT_FILE_NAME_TEMPLATE = '{id}.openapi.json'
+export const DEFAULT_FILE_NAME_TEMPLATE_YAML = '{id}.openapi.yaml'
+export const PROJECT_CONFIG_FILE = 'apifox-pull.config.json'
+export const GLOBAL_CONFIG_DIRECTORY = 'apifox-pull'
+export const GLOBAL_CONFIG_FILE = 'apifox-pull.config.json'
