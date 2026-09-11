@@ -5,6 +5,14 @@
   "packageManager": "pnpm@11.1.3",
   "description": "Export Apifox projects as OpenAPI JSON.",
   "license": "MIT",
+  "homepage": "https://github.com/reeswell/apifox-pull#readme",
+  "bugs": {
+    "url": "https://github.com/reeswell/apifox-pull/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reeswell/apifox-pull.git"
+  },
   "keywords": [
     "apifox",
     "openapi",
