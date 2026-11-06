@@ -190,6 +190,35 @@ async function readExistingSnapshot(file: string): Promise<string | undefined> {
   }
 }
 
+async function addApiMetadata(document: unknown, apiId: string, baseUrl: string, projectId: string, token: string, fetcher: typeof fetch): Promise<void> {
+  const normalized = baseUrl.replace(/\/+$/, '')
+  const detailBase = normalized.endsWith('/api/v1')
+    ? normalized
+    : `${normalized.replace(/\/v1$/, '')}/api/v1`
+  const detail = asRecord(await requestApifoxJson(fetcher, `${detailBase}/projects/${encodeURIComponent(projectId)}/http-apis/${encodeURIComponent(apiId)}?locale=zh-CN`, token, {
+    headers: { 'X-Project-Id': projectId },
+  }))
+  if (!detail || String(detail.id) !== apiId || typeof detail.path !== 'string' || typeof detail.method !== 'string')
+    throw new Error(`Invalid API detail response for ${apiId}.`)
+  const paths = asRecord(asRecord(document)?.paths)
+  const operation = asRecord(asRecord(paths?.[detail.path])?.[detail.method.toLowerCase()])
+  if (!operation)
+    throw new Error(`API detail ${apiId} does not match an exported operation.`)
+  const metadata: JsonRecord = {}
+  for (const key of ['createdAt', 'updatedAt', 'creatorId', 'editorId', 'creatorUserId', 'editorUserId', 'responsibleId', 'folderId']) {
+    const value = detail[key]
+    if (value === undefined)
+      continue
+    const valid = key.endsWith('At')
+      ? typeof value === 'string' && Number.isFinite(Date.parse(value))
+      : typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    if (!valid)
+      throw new Error(`Invalid API metadata field ${key} for ${apiId}.`)
+    metadata[key] = value
+  }
+  operation['x-apifox-metadata'] = metadata
+}
+
 export async function exportOpenApi({
   apiIds = [],
   baseUrl = DEFAULT_BASE_URL,
@@ -200,6 +229,8 @@ export async function exportOpenApi({
   fetcher = fetch,
   fileNameTemplate = DEFAULT_FILE_NAME_TEMPLATE,
   folderIds = [],
+  includeMetadata = false,
+  moduleId,
   onProgress,
   output,
   projectId,
@@ -207,6 +238,12 @@ export async function exportOpenApi({
 }: OpenApiExportOptions): Promise<OpenApiExportResult> {
   if (check && dryRun)
     throw new Error('Use either check mode or dry-run mode, not both.')
+  if (includeMetadata && (!apiIds.length || folderIds.length))
+    throw new Error('--include-metadata requires API IDs and does not support folder or whole-project exports yet.')
+  if (moduleId !== undefined && (!/^\d+$/.test(moduleId) || !Number.isSafeInteger(Number(moduleId)) || Number(moduleId) <= 0))
+    throw new Error('moduleId must be a positive safe integer.')
+  if (moduleId !== undefined && (apiIds.length || folderIds.length))
+    throw new Error('Module export cannot be combined with API or folder IDs.')
   const documents: OpenApiDocument[] = []
   const usedFiles = new Set<string>()
   const url = getOpenApiExportUrl(baseUrl.replace(/\/+$/, ''), projectId, exportUrlTemplate)
@@ -217,13 +254,19 @@ export async function exportOpenApi({
     const document = await requestApifoxJson(fetcher, url, token, {
       body: {
         exportFormat,
+        ...(moduleId === undefined ? {} : { moduleId: Number(moduleId) }),
         oasVersion: DEFAULT_OAS_VERSION,
         options: { addFoldersToTags: true, includeApifoxExtensionProperties: false },
         scope: getExportScope(target),
       },
       method: 'POST',
     })
-    const file = getUniqueOutputFile(getOpenApiOutputFile(target, document, fileNameTemplate, exportFormat), target, usedFiles)
+    if (includeMetadata && target.type === 'API')
+      await addApiMetadata(document, target.id, baseUrl, projectId, token, fetcher)
+    const outputFile = moduleId === undefined
+      ? getOpenApiOutputFile(target, document, fileNameTemplate, exportFormat)
+      : `module-${Number(moduleId)}.openapi.${exportFormat.toLowerCase()}`
+    const file = getUniqueOutputFile(outputFile, target, usedFiles)
     usedFiles.add(file)
     const content = serializeOpenApiDocument(document, exportFormat)
     const changed = await readExistingSnapshot(path.join(output, file)) !== content

@@ -1,3 +1,5 @@
 {
-  "projectId": "6400879"
+  "projectId": "6400879",
+  "baseUrl": "https://api.apifox.com/v1",
+  "output": "docs/apifox"
 }

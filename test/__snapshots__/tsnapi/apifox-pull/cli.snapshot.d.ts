@@ -3,6 +3,9 @@
  */
 // #region Interfaces
 export interface CliOptions extends ConfigValues {
+  includeMetadata?: boolean;
+  moduleId?: string;
+  exportHistory?: boolean;
   check: boolean;
   command: Command;
   config?: string;
@@ -11,6 +14,8 @@ export interface CliOptions extends ConfigValues {
   global: boolean;
   globalConfig?: string;
   help: boolean;
+  days?: 1 | 3;
+  user?: string;
   json: boolean;
 }
 // #endregion

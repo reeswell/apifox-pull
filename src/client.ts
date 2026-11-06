@@ -5,7 +5,9 @@ type JsonRecord = Record<string, unknown>
 
 export interface RequestJsonOptions {
   body?: unknown
+  headers?: Record<string, string>
   method?: string
+  unwrapData?: boolean
 }
 
 function asRecord(value: unknown): JsonRecord | undefined {
@@ -35,6 +37,7 @@ export async function requestApifoxJson(
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json'
   }
+  Object.assign(headers, options.headers)
 
   const response = await fetcher(url, {
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -57,7 +60,9 @@ export async function requestApifoxJson(
     throw new Error(`Apifox request failed (${response.status})${message ? `: ${message}` : ''}`)
   }
 
-  const data = unwrapData(payload)
+  if (asRecord(payload)?.success === false)
+    throw new Error(`Apifox request reported failure (${response.status}) from ${url}.`)
+  const data = options.unwrapData === false ? payload : unwrapData(payload)
   if (data === undefined) {
     throw new Error(`Apifox request returned an empty JSON response (${response.status}) from ${url}.`)
   }

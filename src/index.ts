@@ -10,7 +10,11 @@ export {
   DEFAULT_OUTPUT_FILE_YAML,
 } from './constants'
 export { exportOpenApi, getOpenApiExportUrl, getOpenApiOutputFile, planExportTargets, serializeOpenApiDocument, toSafeFileSegment } from './export'
+export { buildApiChangeHistoryUrl, formatApiChange, getApiChanges } from './history'
 export type {
+  ApiChangeOptions,
+  ApiChangeRecord,
+  ApiChangeResult,
   ConfigField,
   ConfigurationSource,
   ConfigValues,

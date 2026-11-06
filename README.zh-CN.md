@@ -110,6 +110,53 @@ afx -f 12 -a 78
 APIFOX_TOKEN="$APIFOX_TOKEN" afx --check
 ```
 
+## 按模块和修改者筛选并导出
+
+```bash
+afx history --module-id 4304445 --user 2684381 --days 3 --export
+```
+
+这会读取模块 `4304445` 的接口列表，仅保留最近三天内 `editorUserId=2684381` 的接口，并将每个匹配接口导出到 `output` 目录。也可以省略 `--user` 查看模块内所有最近更新接口。`--module-id` 与 `--folder-id` 可同时使用以进一步缩小范围。
+
+## 导出整个模块
+
+```bash
+afx --project-id 6400879 --module-id 4304445 --output docs/apifox
+```
+
+`--module-id` 是普通导出命令的 CLI 参数，导出该模块全部接口为 `module-4304445.openapi.json`（YAML 对应 `.yaml`）。支持 `--check` 和 `--dry-run`。不可与接口/目录 ID（包括配置中设置的 ID）或 `--include-metadata` 同用。普通模块导出不应用最近修改时间筛选；按修改者筛选请使用上面的 `history` 命令。
+
+## 拉取接口元数据
+
+```bash
+afx -a 492352338 --include-metadata
+```
+
+此 CLI 参数仅支持按接口 ID 导出（可指定多个），暂不支持目录或全项目导出。它额外请求 `/api/v1/projects/{projectId}/http-apis/{apiId}`，将返回的 `createdAt`、`updatedAt`、`creatorId`、`editorId`、`creatorUserId`、`editorUserId`、`responsibleId`、`folderId` 写入对应 operation 的 `x-apifox-metadata`。JSON 和 YAML 均保留该字段。
+
+时间保留原始 ISO 格式；人员和目录仅记录 ID，不推测名称。`responsibleId: 0` 表示未设置，未返回的字段不补值。详情使用现有 Bearer Token；这是浏览器内部接口，尚未确认系统级 Access Token 是否具备访问权限。如果鉴权失败或详情与导出接口不匹配，本次接口文件不会写入，命令报错；不加该参数仍按原方式导出。不会使用或存储浏览器 Cookie。
+
+## 查询最近修改的接口
+
+查看项目最近一天（默认）或三天内更新的 HTTP API：
+
+```bash
+# 全部最近更新的接口
+afx history --days 3
+
+# 只看最后修改者 editorUserId=2684381 的接口
+afx history --user 2684381 --days 3
+
+# 限定目录并输出 JSON
+afx history --user 2684381 --days 1 --folder-id 91839624 --json
+
+# 查询并导出匹配接口的 OpenAPI 详情
+# 输出目录取自 output 配置
+afx history --user 2684381 --days 3 --export
+```
+
+`--export` 会把匹配结果逐个导出为 OpenAPI 文件，并自动附加已确认的创建/修改时间、创建者/修改者 ID、责任人 ID 和目录 ID 元数据；没有匹配接口时不会写文件。`--user` 只接受数字形式的 `editorUserId`，暂不支持姓名。命令读取项目接口列表（不是审计日志），按 `updatedAt` 筛选时间范围，并展示接口 ID、名称、方法、路径、目录 ID、最后修改时间和最后修改者 ID。它表示“当前最后修改者”，不是完整的历史操作记录。查询会读取所有分页并校验总数；如果响应不完整会报错而不是返回误导性的空结果。`projectId` 和 `token` 默认从现有项目、用户配置或环境变量读取。
+
 ## 开发
 
 ```bash

@@ -35,6 +35,87 @@ describe('export planning', () => {
 })
 
 describe('exportOpenApi', () => {
+  it.each(['JSON', 'YAML'] as const)('exports an entire module as %s', async (exportFormat) => {
+    const output = await createOutputDirectory()
+    const result = await exportOpenApi({
+      moduleId: '4304445',
+      exportFormat,
+      output,
+      projectId: '6400879',
+      token: 'test',
+      fetcher: async (_url, options) => {
+        expect(JSON.parse(String(options?.body))).toMatchObject({ moduleId: 4304445, scope: { type: 'ALL' } })
+        return Response.json({ openapi: '3.1.0', paths: { '/test': { get: {} } } })
+      },
+    })
+    expect(result.file).toBe(`module-4304445.openapi.${exportFormat.toLowerCase()}`)
+    await expect(readFile(path.join(output, result.file!), 'utf8')).resolves.toContain('/test')
+  })
+
+  it.each(['', '-1', 'abc', '1.5', '9007199254740992'])('rejects invalid module ID %s', async (moduleId) => {
+    await expect(exportOpenApi({ moduleId, output: 'unused', projectId: '1', token: 'test' })).rejects.toThrow('moduleId')
+  })
+
+  it('rejects mixing module export with partial targets', async () => {
+    await expect(exportOpenApi({ moduleId: '1', apiIds: ['2'], output: 'unused', projectId: '1', token: 'test' })).rejects.toThrow('cannot be combined')
+  })
+
+  it('adds confirmed detail metadata without inventing names or missing fields', async () => {
+    const output = await createOutputDirectory()
+    const metadata = { createdAt: '2026-07-24T09:50:38.000Z', updatedAt: '2026-10-20T02:50:01.000Z', creatorId: 2684381, editorId: 2684381, creatorUserId: 2684381, editorUserId: 2684381, responsibleId: 0, folderId: 91839624 }
+    const fetcher: typeof fetch = async (url, options) => {
+      if (options?.method === 'POST')
+        return Response.json({ paths: { '/preview': { post: { summary: 'Preview' } } } })
+      expect(String(url)).toBe('https://api.apifox.com/api/v1/projects/6400879/http-apis/492352338?locale=zh-CN')
+      expect(options?.headers).toMatchObject({ 'Authorization': 'Bearer test-token', 'X-Project-Id': '6400879' })
+      return Response.json({ success: true, data: { id: 492352338, method: 'post', path: '/preview', ...metadata, tags: ['not-a-folder'] } })
+    }
+    const options = { apiIds: ['492352338'], fetcher, includeMetadata: true, output, projectId: '6400879', token: 'test-token' }
+    await exportOpenApi(options)
+    const document = JSON.parse(await readFile(path.join(output, '492352338.openapi.json'), 'utf8'))
+    expect(document.paths['/preview'].post).toEqual({ 'summary': 'Preview', 'x-apifox-metadata': metadata })
+    await expect(exportOpenApi({ ...options, check: true })).resolves.toMatchObject({ changed: false })
+  })
+
+  it.each([
+    { id: 2, method: 'post', path: '/preview' },
+    { id: 1, method: 'post', path: '/wrong' },
+    { id: 1, method: 'post', path: '/preview', createdAt: 'invalid' },
+    { id: 1, method: 'post', path: '/preview', responsibleId: 'unknown' },
+  ])('rejects malformed or mismatched details: %j', async (detail) => {
+    const output = await createOutputDirectory()
+    await expect(exportOpenApi({
+      apiIds: ['1'],
+      includeMetadata: true,
+      output,
+      projectId: '1',
+      token: 'test',
+      fetcher: async (_url, options) => Response.json(options?.method === 'POST'
+        ? { paths: { '/preview': { post: {} } } }
+        : { data: detail }),
+    })).rejects.toThrow(/Invalid API|does not match/)
+    await expect(access(path.join(output, '1.openapi.json'))).rejects.toThrow()
+  })
+
+  it('rejects unsupported metadata scopes before fetching', async () => {
+    await expect(exportOpenApi({ includeMetadata: true, output: 'unused', projectId: '1', token: 'test' })).rejects.toThrow('requires API IDs')
+  })
+
+  it.each([401, 403])('does not write a partial export when detail access fails (%s)', async (status) => {
+    const output = await createOutputDirectory()
+    await expect(exportOpenApi({
+      apiIds: ['1'],
+      includeMetadata: true,
+      output,
+      projectId: '1',
+      token: 'test',
+      fetcher: async (_url, options) => options?.method === 'POST'
+        ? Response.json({ paths: { '/preview': { post: {} } } })
+        : Response.json({ message: 'Access denied' }, { status }),
+    })).rejects.toThrow(`Apifox request failed (${status})`)
+    await expect(access(path.join(output, '1.openapi.json'))).rejects.toThrow()
+  })
+
   it('does not rewrite an unchanged OpenAPI snapshot', async () => {
     const output = await createOutputDirectory()
     const openapi = { openapi: '3.1.0', paths: {}, tags: [] }
